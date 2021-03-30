@@ -9,6 +9,7 @@ import scipy.sparse
 import time
 import statistics
 import argparse
+from tqdm import tqdm
 
 def slow_one_dimension(a):
     a = np.asarray(a, dtype=complex)
@@ -63,7 +64,7 @@ def fast_two_dimension_inverse(a):
 def fast_one_dimension(x):
     x = np.asarray(x, dtype=complex)
     N = x.shape[0]
-    if N % 2 != 0:
+    if N % 2 > 0:
         raise AssertionError("size of a must be a power of 2")
     elif N <= 16:
         return slow_one_dimension(x)
@@ -72,7 +73,7 @@ def fast_one_dimension(x):
         odd = fast_one_dimension(x[1::2])
         res = np.zeros(N, dtype=complex)
         for n in range (N):
-            res[n] = even[n % (N//2)] + np.exp(-2j * np.pi * n / N) * odd[n % (N//2)]
+            res[n] = even[n % (int(N / 2))] + np.exp(-2j * np.pi * n / N) * odd[n % (int(N / 2))]
         return res
 
 def fast_two_dimension (img):
@@ -86,58 +87,75 @@ def fast_two_dimension (img):
         res[j, :] = fast_one_dimension(res[j, :])
     return res
 
-
-def IFFT2_helper(x):
-    temp = np.flip(x[1:])
-    x = np.concatenate(([x[0]], temp), axis=0)
-    return fast_one_dimension(x)
-
-
-def IFFT2(x):
-    result = np.empty_like(x, dtype=complex)
-    w, h = x.shape
-
-    for i in range(w):
-        result[i, :] = IFFT2_helper(x[i, :])
-
-    for i in range(h):
-        result[:, i] = IFFT2_helper(result[:, i])
-
-    return result / (w * h)
-
-
-
-def denoise(img):
+def denoise(img, type, precentage):
     fft_img = img.copy()
 
     h, w = fft_img.shape
-    h_fraction = 0.1
-    fft_img[int(h_fraction * h):int(h*(1- h_fraction)),:] = 0.0
-    w_fraction = 0.1
-    fft_img[:, int(w_fraction * w):int(w*(1- w_fraction))] = 0.0
+    if type == 1:
+        print("remove low frequency")
+        for r in tqdm(range(h)):
+            for c in range(w):
+                if r < h * precentage or r > h*(1-precentage):
+                    fft_img[r, c]= 0
+                if c < w * precentage or c > w*(1-precentage):
+                    fft_img[r, c] = 0
+        non_zero_count = np.count_nonzero(fft_img)
+        print("amount of non-zeros: ", non_zero_count)
+        print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
-    non_zero_count = np.count_nonzero(fft_img)
-    print("amount of non-zeros: ", non_zero_count)
-    print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
+        denoised = fast_two_dimension_inverse(fft_img)
+        return denoised.real
+    elif type == 2:
+        print("remove high frequency")
+        for r in tqdm(range(h)):
+            for c in range(w):
+                if r > h * precentage and r < h*(1-precentage):
+                    fft_img[r, c]= 0
+                if c > w * precentage and c < w*(1-precentage):
+                    fft_img[r, c] = 0
+        non_zero_count = np.count_nonzero(fft_img)
+        print("amount of non-zeros: ", non_zero_count)
+        print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
-    denoised = fast_two_dimension_inverse(fft_img)
-    return denoised.real
+        denoised = fast_two_dimension_inverse(fft_img)
+        return denoised.real
+    elif type == 3:
+        print("width and height have different fraction")
+        h_fraction = 0.1
+        fft_img[int(h_fraction * h):int(h * (1 - h_fraction)), :] = 0.0
+        w_fraction = 0.1
+        fft_img[:, int(w_fraction * w):int(w * (1 - w_fraction))] = 0.0
+        non_zero_count = np.count_nonzero(fft_img)
+        print("amount of non-zeros: ", non_zero_count)
+        print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
+        denoised = fast_two_dimension_inverse(fft_img)
+        return denoised.real
+
+
 
 
 
 def compress_f (img, filename, precentage):
     fft_img = img.copy()
-    h = int (math.sqrt(1-precentage) * (fft_img.shape[0] / 2))
-    w = int (math.sqrt(1-precentage) * (fft_img.shape[1] / 2))
-    fft_img[h:-h, :] = 0 + 0.j
-    fft_img[:, w:-w] = 0 + 0.j
+    w, h = fft_img.shape
+    #h = int (math.sqrt(1-precentage) * (fft_img.shape[0] / 2))
+    #w = int (math.sqrt(1-precentage) * (fft_img.shape[1] / 2))
+    #fft_img[h:-h, :] = 0 + 0.j
+    #fft_img[:, w:-w] = 0 + 0.j
+    for r in tqdm(range(w)):
+        for c in range(h):
+            if (r + c) > precentage * (w + h):
+                fft_img[r, c] = 0
+
     nonzero_pre_compression = np.count_nonzero(img)
     nonzero_post_compression = np.count_nonzero(fft_img)
     print("nonzero values: ", np.count_nonzero(fft_img))
     print("compression ratio: ", 1 - (nonzero_post_compression / nonzero_pre_compression))
-    temp_parse = csr_matrix (fft_img)
-    scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
-    return temp_parse
+    #temp_parse = csr_matrix (fft_img)
+    #scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
+    name = filename+"_"+str(precentage) + ".csv"
+    np.savetxt(name, fft_img, delimiter=",")
+    return fast_two_dimension_inverse(fft_img).real
 
 def slow_two_dimension(a):
     a = np.asarray(a, dtype=complex)
@@ -165,31 +183,22 @@ def mode_4():
     x = 32
     for j in range(5):
         dft_list = list()
-        for i in range(15):
-            y = np.random.rand(x, x)
-            startTime = time.perf_counter()
-            fast_two_dimension(y)
-            endTime = time.perf_counter()
-            # print(np.allclose(my, np.fft.fft2(y)))
-            diffTime = endTime - startTime
-            dft_list.append(diffTime)
-
-        dft_mean.append(statistics.mean(dft_list))
-        dft_std.append(statistics.stdev(dft_list))
-        x *= 2
-
-    x = 32
-    for j in range(5):
         fft_list = list()
         for i in range(15):
             y = np.random.rand(x, x)
-            startTime = time.perf_counter()
-            slow_two_dimension(y)
-            endTime = time.perf_counter()
+            startTime = time.time()
+            fast_two_dimension(y)
+            endTime = time.time()
             # print(np.allclose(my, np.fft.fft2(y)))
             diffTime = endTime - startTime
-            fft_list.append(diffTime)
-
+            dft_list.append(diffTime)
+            slow_start = time.time()
+            slow_two_dimension(y)
+            slow_end = time.time()
+            diffTimeSlow = slow_end-slow_start
+            fft_list.append(diffTimeSlow)
+        dft_mean.append(statistics.mean(dft_list))
+        dft_std.append(statistics.stdev(dft_list))
         fft_mean.append(statistics.mean(fft_list))
         fft_std.append(statistics.stdev(fft_list))
         x *= 2
@@ -241,30 +250,24 @@ def mode_3 (iname):
     compress_4 = compress_f(img_FFT, filename, 0.6)
     compress_5 = compress_f(img_FFT, filename, 0.8)
     compress_6 = compress_f(img_FFT, filename, 0.95)
-    uncompressed_1 = fast_two_dimension_inverse(compress_1.toarray())
-    uncompressed_2 = fast_two_dimension_inverse(compress_2.toarray())
-    uncompressed_3 = fast_two_dimension_inverse(compress_3.toarray())
-    uncompressed_4 = fast_two_dimension_inverse(compress_4.toarray())
-    uncompressed_5 = fast_two_dimension_inverse(compress_5.toarray())
-    uncompressed_6 = fast_two_dimension_inverse(compress_6.toarray())
-    plt.subplot(321), plt.imshow(uncompressed_1.real, cmap='gray')
+
+    plt.subplot(321), plt.imshow(compress_1.real, cmap='gray')
     plt.title("0% compression"), plt.xticks([]), plt.yticks([])
 
-    plt.subplot(322), plt.imshow(uncompressed_2.real, cmap='gray')
+    plt.subplot(322), plt.imshow(compress_2.real, cmap='gray')
     plt.title("25% compression"), plt.xticks([]), plt.yticks([])
 
-    plt.subplot(323), plt.imshow(uncompressed_3.real, cmap='gray')
+    plt.subplot(323), plt.imshow(compress_3.real, cmap='gray')
     plt.title("40% compression"), plt.xticks([]), plt.yticks([])
 
-    plt.subplot(324), plt.imshow(uncompressed_4.real, cmap='gray')
+    plt.subplot(324), plt.imshow(compress_4.real, cmap='gray')
     plt.title("60% compression"), plt.xticks([]), plt.yticks([])
 
-    plt.subplot(325), plt.imshow(uncompressed_5.real, cmap='gray')
+    plt.subplot(325), plt.imshow(compress_5.real, cmap='gray')
     plt.title("80% compression"), plt.xticks([]), plt.yticks([])
 
-    plt.subplot(326), plt.imshow(uncompressed_6.real, cmap='gray')
+    plt.subplot(326), plt.imshow(compress_6.real, cmap='gray')
     plt.title("95% compression"), plt.xticks([]), plt.yticks([])
-
     plt.show()
 
 
