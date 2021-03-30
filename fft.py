@@ -15,10 +15,12 @@ def slow_one_dimension(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
     res = np.zeros(N, dtype=complex)
-    for k in range(N):
-        for n in range(N):
-            res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
-    return res
+    V = np.array([[np.exp(-2j * np.pi * v * y / N) for v in range(N)] for y in range(N)])
+    return a.dot(V)
+    #for k in range(N):
+     #   for n in range(N):
+      #      res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
+    #return a.dot(res)
 
 def slow_one_dimension_inverse(a):
     a = np.asarray(a, dtype=complex)
@@ -43,11 +45,13 @@ def fast_one_dimension_inverse(a):
         even = fast_one_dimension_inverse(a[::2])
         odd = fast_one_dimension_inverse(a[1::2])
         res = np.zeros(N, dtype=complex)
+        #res = np.exp(-2j * np.pi * np.arange(N) / N)
+        #return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
 
         half_size = N // 2
         for n in range(N):
             res[n] = half_size * even[n % half_size] + np.exp(2j * np.pi * n / N) * half_size * odd[n % half_size]
-            res[n] /= N
+        res[n] /= N
 
         return res
 
@@ -66,15 +70,18 @@ def fast_one_dimension(x):
     N = x.shape[0]
     if N % 2 > 0:
         raise AssertionError("size of a must be a power of 2")
-    elif N <= 16:
+    elif N <= 8:
         return slow_one_dimension(x)
     else:
         even = fast_one_dimension(x[::2])
         odd = fast_one_dimension(x[1::2])
-        res = np.zeros(N, dtype=complex)
-        for n in range (N):
-            res[n] = even[n % (int(N / 2))] + np.exp(-2j * np.pi * n / N) * odd[n % (int(N / 2))]
-        return res
+        #res = np.zeros(N, dtype=complex)
+        res = np.exp(-2j * np.pi * np.arange(N) / N)
+        return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
+
+        #for n in range (N):
+         #   res[n] = even[n % ((N // 2))] + np.exp(-2j * np.pi * n / N) * odd[n % ((N // 2))]
+        #return res
 
 def fast_two_dimension (img):
     a = np.asarray(img, dtype=complex)
@@ -222,14 +229,14 @@ def mode_4():
     plt.show()
 
 
-def mode_2 (iname):
+def mode_2 (iname, type, precentage):
     img = cv2.imread(iname, cv2.IMREAD_UNCHANGED)
     vertical = img.shape[0]
     horizontal = img.shape[1]
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
     img_FFT = fast_two_dimension(img)
-    denoised = denoise(img_FFT)
+    denoised = denoise(img_FFT, type, precentage)
     plt.subplot(121)
     plt.imshow(img)
     plt.subplot(122)
@@ -283,10 +290,14 @@ def mode_1 (iname) :
     img = cv2.resize(img, new_shape)
     img_FFT = fast_two_dimension(img)
     plt.figure("Mode_1")
+    #plt.subplot(121)
+    #plt.imshow(img)
+    #plt.subplot(122)
     plt.subplot(121)
-    plt.imshow(img)
-    plt.subplot(122)
     plt.imshow(np.abs(img_FFT), norm=colors.LogNorm())
+    img_FFT_2 = np.fft.fft2(img)
+    plt.subplot(122)
+    plt.imshow(np.abs(img_FFT_2), norm=colors.LogNorm())
     plt.show()
 
 def parseArgs():
@@ -310,7 +321,7 @@ if __name__ == '__main__':
     if (mode ==1):
         mode_1(image)
     elif (mode == 2):
-        mode_2(image)
+        mode_2(image, 1, 0.1)
     elif (mode == 3):
         mode_3(image)
     elif (mode == 4):
