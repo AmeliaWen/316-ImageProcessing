@@ -14,13 +14,14 @@ from tqdm import tqdm
 def sfft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
-    #res = np.zeros(N, dtype=complex)
-    V = np.array([[np.exp(-2j * np.pi * v * y / N) for v in range(N)] for y in range(N)])
-    return a.dot(V)
-    #for k in range(N):
-     #   for n in range(N):
-      #      res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
+    res = np.zeros(N, dtype=complex)
+    #V = np.array([[np.exp(-2j * np.pi * v * y / N) for v in range(N)] for y in range(N)])
+    #return a.dot(V)
+    for k in range(N):
+        for n in range(N):
+            res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
     #return a.dot(res)
+    return res
 
 def ifft_1d(a):
     a = np.asarray(a, dtype=complex)
@@ -44,16 +45,18 @@ def ifft(a):
     else:
         even = ifft(a[::2])
         odd = ifft(a[1::2])
-        res = np.zeros(N, dtype=complex)
+        #res = np.zeros(N, dtype=complex)
         #res = np.exp(-2j * np.pi * np.arange(N) / N)
         #return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
 
-        half_size = N // 2
-        for n in range(N):
-            res[n] = half_size * even[n % half_size] + np.exp(2j * np.pi * n / N) * half_size * odd[n % half_size]
-        res[n] /= N
-
-        return res
+        #half_size = N // 2
+        #for n in range(N):
+        #    res[n] = half_size * even[n % half_size] + np.exp(2j * np.pi * n / N) * half_size * odd[n % half_size]
+        #res[n] /= N
+        res = np.exp(2j * np.pi * np.arange(N) / N).astype(np.complex64)
+        return np.concatenate((even + res[:N // 2] * odd,
+                               even + res[N // 2:] * odd), axis=0)
+        #return res
 
 def ifft_2d(a):
     a = np.asarray(a, dtype=complex)
@@ -70,7 +73,7 @@ def fft_1d(x):
     N = x.shape[0]
     if N % 2 > 0:
         raise AssertionError("size of a must be a power of 2")
-    elif N <= 8:
+    elif N <= 16:
         return sfft_1d(x)
     else:
         even = fft_1d(x[::2])
@@ -94,25 +97,13 @@ def fft_2d (img):
         res[j, :] = fft_1d(res[j, :])
     return res
 
-def denoise(img, type, precentage):
+def denoise(img, type, precentage, test):
     fft_img = img.copy()
 
     h, w = fft_img.shape
-    if type == 1:
-        print("remove low frequency")
-        for r in tqdm(range(h)):
-            for c in range(w):
-                if r < h * precentage or r > h*(1-precentage):
-                    fft_img[r, c]= 0
-                if c < w * precentage or c > w*(1-precentage):
-                    fft_img[r, c] = 0
-        non_zero_count = np.count_nonzero(fft_img)
-        print("amount of non-zeros: ", non_zero_count)
-        print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
-        denoised = ifft_2d(fft_img)
-        return denoised.real
-    elif type == 2:
+
+    if type == 1:
         print("remove high frequency")
         for r in tqdm(range(h)):
             for c in range(w):
@@ -125,20 +116,49 @@ def denoise(img, type, precentage):
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
         denoised = ifft_2d(fft_img)
-        return denoised.real
-    elif type == 3:
+        #not in test mode
+        if test == 0:
+            plt.subplot(122)
+        else:
+            plt.subplot(131)
+        plt.imshow(np.abs(denoised), norm=colors.LogNorm())
+
+    elif type == 2:
         print("width and height have different fraction")
         h_fraction = 0.1
         fft_img[int(h_fraction * h):int(h * (1 - h_fraction)), :] = 0.0
-        w_fraction = 0.1
+        w_fraction = 0.15
         fft_img[:, int(w_fraction * w):int(w * (1 - w_fraction))] = 0.0
         non_zero_count = np.count_nonzero(fft_img)
         print("amount of non-zeros: ", non_zero_count)
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
         denoised = ifft_2d(fft_img)
-        return denoised.real
+        if test == 0:
+            plt.subplot(122)
+        else:
+            plt.subplot(132)
+        plt.imshow(np.abs(denoised), norm=colors.LogNorm())
 
-
+    elif type == 3:
+        print("threshold everything, threshold is 0.9 ")
+        threshold = fft_img.real.max() * 0.9
+        for r in tqdm(range(h)):
+            for c in range(w):
+                if fft_img[r, c] < threshold and fft_img[r, c] > -threshold:
+                    fft_img[r, c] = fft_img[r, c]
+                elif fft_img[r, c] <= -threshold:
+                    fft_img[r, c] = -threshold
+                else :
+                    fft_img[r, c] = threshold
+        non_zero_count = np.count_nonzero(fft_img)
+        print("amount of non-zeros: ", non_zero_count)
+        print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
+        denoised = ifft_2d(fft_img)
+        if test == 0:
+            plt.subplot(122)
+        else:
+            plt.subplot(133)
+        plt.imshow(np.abs(denoised), norm=colors.LogNorm())
 
 
 
@@ -168,11 +188,11 @@ def sfft (a):
     a = np.asarray(a, dtype=complex)
     N, M = a.shape
     res = np.zeros((N, M), dtype=complex)
-    for k in range(N):
-        for l in range(M):
+    for r in range(N):
+        for c in range(M):
             for m in range(M):
                 for n in range(N):
-                    res[k, l] += a[n, m] * np.exp(-2j * np.pi * ((l * m / M) + (k * n / N)))
+                    res[r, c] += a[n, m] * np.exp(-2j * np.pi * ((float(r * n) / N) + (float (c * m) / M)))
     return res
 
 def mode_4():
@@ -190,18 +210,20 @@ def mode_4():
     for j in range(5):
         dft_list = list()
         fft_list = list()
-        for i in range(15):
+        for i in range(10):
             y = np.random.rand(x, x)
             startTime = time.time()
             fft_2d(y)
             endTime = time.time()
             # print(np.allclose(my, np.fft.fft2(y)))
             diffTime = endTime - startTime
+            print("Fast time: {}".format(diffTime))
             dft_list.append(diffTime)
             slow_start = time.time()
             sfft(y)
             slow_end = time.time()
             diffTimeSlow = slow_end-slow_start
+            print("Naive time: {}".format(diffTimeSlow))
             fft_list.append(diffTimeSlow)
         dft_mean.append(statistics.mean(dft_list))
         dft_std.append(statistics.stdev(dft_list))
@@ -235,11 +257,29 @@ def mode_2 (iname, type, precentage):
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
     img_FFT = fft_2d(img)
-    denoised = denoise(img_FFT, type, precentage)
     plt.subplot(121)
     plt.imshow(img)
-    plt.subplot(122)
-    plt.imshow(np.abs(denoised), norm=colors.LogNorm())
+    denoise(img_FFT, type, precentage, 0)
+    #plt.subplot(122)
+    #plt.imshow((denoised.real), norm=colors.LogNorm())
+    plt.show()
+
+def mode_2_test (iname, precentage):
+    img = cv2.imread(iname, cv2.IMREAD_UNCHANGED)
+    vertical = img.shape[0]
+    horizontal = img.shape[1]
+    new_shape = (changeSize(vertical), changeSize(horizontal))
+    img = cv2.resize(img, new_shape)
+    img_FFT = fft_2d(img)
+    denoise(img_FFT, 1, precentage, 1)
+    denoise(img_FFT, 2, precentage, 2)
+    denoise(img_FFT, 3, precentage, 3)
+    #plt.subplot(131)
+    #plt.imshow(np.abs(denoised_1), norm=colors.LogNorm())
+    #plt.subplot(132)
+    #plt.imshow(np.abs(denoised_2), norm=colors.LogNorm())
+    #plt.subplot(133)
+    #plt.imshow(np.abs(denoised_3), norm=colors.LogNorm())
     plt.show()
 
 def mode_3 (iname):
@@ -250,7 +290,8 @@ def mode_3 (iname):
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
     img_FFT = fft_2d(img)
-    compress_1 = compress_f (img_FFT, filename, 0)
+
+    compress_1 = compress_f(img_FFT, filename, 0)
     compress_2 = compress_f(img_FFT, filename, 0.25)
     compress_3 = compress_f(img_FFT, filename, 0.4)
     compress_4 = compress_f(img_FFT, filename, 0.6)
@@ -289,9 +330,20 @@ def mode_1 (iname) :
     img = cv2.resize(img, new_shape)
     img_FFT = fft_2d(img)
     plt.figure("Mode_1")
-    #plt.subplot(121)
-    #plt.imshow(img)
-    #plt.subplot(122)
+    plt.subplot(121)
+    plt.imshow(img)
+    plt.subplot(122)
+    plt.imshow(np.abs(img_FFT), norm=colors.LogNorm())
+    plt.show()
+
+def mode_1_test (iname):
+    img = cv2.imread(iname, cv2.IMREAD_GRAYSCALE)
+    vertical = img.shape[0]
+    horizontal = img.shape[1]
+    new_shape = (changeSize(vertical), changeSize(horizontal))
+    img = cv2.resize(img, new_shape)
+    img_FFT = fft_2d(img)
+    plt.figure("Mode_1_test")
     plt.subplot(121)
     plt.imshow(np.abs(img_FFT), norm=colors.LogNorm())
     img_FFT_2 = np.fft.fft2(img)
@@ -302,9 +354,11 @@ def mode_1 (iname) :
 def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', action='store', dest='mode',
-                        help='Mode of operation 1-> fast, 2-> denoise, 3-> compress&save 4-> plot', type=int, default=1)
+                        help='Mode of operation 1. fast, 2-> denoise, 3-> compress&save 4-> plot', type=int, default=1)
     parser.add_argument('-i', action='store', dest='image',
                         help='image path to work on', type=str, default='moonlanding.png')
+    parser.add_argument('-t', action='store', dest='test',
+                        help='use to test the program', type=int, default=0)
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -317,7 +371,12 @@ if __name__ == '__main__':
         exit(1)
     mode = result.mode
     image = result.image
-    if (mode ==1):
+    test = result.test
+    if (test == 1):
+        mode_1_test(image)
+    elif (test == 2):
+        mode_2_test(image, 0.1)
+    elif (mode ==1):
         mode_1(image)
     elif (mode == 2):
         mode_2(image, 1, 0.1)
