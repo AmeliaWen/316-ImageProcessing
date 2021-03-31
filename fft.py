@@ -11,10 +11,10 @@ import statistics
 import argparse
 from tqdm import tqdm
 
-def slow_one_dimension(a):
+def sfft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
-    res = np.zeros(N, dtype=complex)
+    #res = np.zeros(N, dtype=complex)
     V = np.array([[np.exp(-2j * np.pi * v * y / N) for v in range(N)] for y in range(N)])
     return a.dot(V)
     #for k in range(N):
@@ -22,7 +22,7 @@ def slow_one_dimension(a):
       #      res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
     #return a.dot(res)
 
-def slow_one_dimension_inverse(a):
+def ifft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
     res = np.zeros(N, dtype=complex)
@@ -33,17 +33,17 @@ def slow_one_dimension_inverse(a):
     return res
 
 
-def fast_one_dimension_inverse(a):
+def ifft(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
 
     if N % 2 != 0:
         raise AssertionError("size of a must be a power of 2")
     elif N <= 16:
-        return slow_one_dimension_inverse(a)
+        return ifft_1d(a)
     else:
-        even = fast_one_dimension_inverse(a[::2])
-        odd = fast_one_dimension_inverse(a[1::2])
+        even = ifft(a[::2])
+        odd = ifft(a[1::2])
         res = np.zeros(N, dtype=complex)
         #res = np.exp(-2j * np.pi * np.arange(N) / N)
         #return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
@@ -55,26 +55,26 @@ def fast_one_dimension_inverse(a):
 
         return res
 
-def fast_two_dimension_inverse(a):
+def ifft_2d(a):
     a = np.asarray(a, dtype=complex)
     N, M = a.shape
     res = np.zeros((N, M), dtype=complex)
     for row in range(N):
-        res[row, :] = fast_one_dimension_inverse(a[row, :])
+        res[row, :] = ifft(a[row, :])
     for col in range(M):
-        res[:, col] = fast_one_dimension_inverse(res[:, col])
+        res[:, col] = ifft(res[:, col])
     return res
 
-def fast_one_dimension(x):
+def fft_1d(x):
     x = np.asarray(x, dtype=complex)
     N = x.shape[0]
     if N % 2 > 0:
         raise AssertionError("size of a must be a power of 2")
     elif N <= 8:
-        return slow_one_dimension(x)
+        return sfft_1d(x)
     else:
-        even = fast_one_dimension(x[::2])
-        odd = fast_one_dimension(x[1::2])
+        even = fft_1d(x[::2])
+        odd = fft_1d(x[1::2])
         #res = np.zeros(N, dtype=complex)
         res = np.exp(-2j * np.pi * np.arange(N) / N)
         return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
@@ -83,15 +83,15 @@ def fast_one_dimension(x):
          #   res[n] = even[n % ((N // 2))] + np.exp(-2j * np.pi * n / N) * odd[n % ((N // 2))]
         #return res
 
-def fast_two_dimension (img):
+def fft_2d (img):
     a = np.asarray(img, dtype=complex)
     w, h = a.shape
     res = np.empty_like(img, dtype=complex)
     #res = np.zeros((w, h), dtype=complex)
     for i in range(h):
-        res[:, i] = fast_one_dimension(a[:,i])
+        res[:, i] = fft_1d(a[:,i])
     for j in range(w):
-        res[j, :] = fast_one_dimension(res[j, :])
+        res[j, :] = fft_1d(res[j, :])
     return res
 
 def denoise(img, type, precentage):
@@ -110,7 +110,7 @@ def denoise(img, type, precentage):
         print("amount of non-zeros: ", non_zero_count)
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
-        denoised = fast_two_dimension_inverse(fft_img)
+        denoised = ifft_2d(fft_img)
         return denoised.real
     elif type == 2:
         print("remove high frequency")
@@ -124,7 +124,7 @@ def denoise(img, type, precentage):
         print("amount of non-zeros: ", non_zero_count)
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
 
-        denoised = fast_two_dimension_inverse(fft_img)
+        denoised = ifft_2d(fft_img)
         return denoised.real
     elif type == 3:
         print("width and height have different fraction")
@@ -135,7 +135,7 @@ def denoise(img, type, precentage):
         non_zero_count = np.count_nonzero(fft_img)
         print("amount of non-zeros: ", non_zero_count)
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
-        denoised = fast_two_dimension_inverse(fft_img)
+        denoised = ifft_2d(fft_img)
         return denoised.real
 
 
@@ -162,9 +162,9 @@ def compress_f (img, filename, precentage):
     #scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
     name = filename+"_"+str(precentage) + ".csv"
     np.savetxt(name, fft_img, delimiter=",")
-    return fast_two_dimension_inverse(fft_img).real
+    return ifft_2d(fft_img).real
 
-def slow_two_dimension(a):
+def sfft (a):
     a = np.asarray(a, dtype=complex)
     N, M = a.shape
     res = np.zeros((N, M), dtype=complex)
@@ -172,8 +172,7 @@ def slow_two_dimension(a):
         for l in range(M):
             for m in range(M):
                 for n in range(N):
-                    res[k, l] += a[n, m] * \
-                         np.exp(-2j * np.pi * ((l * m / M) + (k * n / N)))
+                    res[k, l] += a[n, m] * np.exp(-2j * np.pi * ((l * m / M) + (k * n / N)))
     return res
 
 def mode_4():
@@ -194,13 +193,13 @@ def mode_4():
         for i in range(15):
             y = np.random.rand(x, x)
             startTime = time.time()
-            fast_two_dimension(y)
+            fft_2d(y)
             endTime = time.time()
             # print(np.allclose(my, np.fft.fft2(y)))
             diffTime = endTime - startTime
             dft_list.append(diffTime)
             slow_start = time.time()
-            slow_two_dimension(y)
+            sfft(y)
             slow_end = time.time()
             diffTimeSlow = slow_end-slow_start
             fft_list.append(diffTimeSlow)
@@ -235,7 +234,7 @@ def mode_2 (iname, type, precentage):
     horizontal = img.shape[1]
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
-    img_FFT = fast_two_dimension(img)
+    img_FFT = fft_2d(img)
     denoised = denoise(img_FFT, type, precentage)
     plt.subplot(121)
     plt.imshow(img)
@@ -250,7 +249,7 @@ def mode_3 (iname):
     horizontal = img.shape[1]
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
-    img_FFT = fast_two_dimension(img)
+    img_FFT = fft_2d(img)
     compress_1 = compress_f (img_FFT, filename, 0)
     compress_2 = compress_f(img_FFT, filename, 0.25)
     compress_3 = compress_f(img_FFT, filename, 0.4)
@@ -288,7 +287,7 @@ def mode_1 (iname) :
     horizontal = img.shape[1]
     new_shape = (changeSize(vertical), changeSize(horizontal))
     img = cv2.resize(img, new_shape)
-    img_FFT = fast_two_dimension(img)
+    img_FFT = fft_2d(img)
     plt.figure("Mode_1")
     #plt.subplot(121)
     #plt.imshow(img)
