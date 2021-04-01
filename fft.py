@@ -11,6 +11,7 @@ import statistics
 import argparse
 from tqdm import tqdm
 
+# this is the fast fourier transform base case
 def sfft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
@@ -23,6 +24,7 @@ def sfft_1d(a):
     #return a.dot(res)
     return res
 
+# this is the inverse fast fourier transform in 1 dimension (base case)
 def ifft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
@@ -33,7 +35,7 @@ def ifft_1d(a):
         res[n] /= N
     return res
 
-
+# this is the inverse fast fourier transform called from ifft_2d
 def ifft(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
@@ -58,6 +60,7 @@ def ifft(a):
                                even + res[N // 2:] * odd), axis=0)
         #return res
 
+# this is the inverse fast fourier transform in 2 dimension
 def ifft_2d(a):
     a = np.asarray(a, dtype=complex)
     N, M = a.shape
@@ -68,6 +71,7 @@ def ifft_2d(a):
         res[:, col] = ifft(res[:, col])
     return res
 
+# this is the fast fourier transform in 1 dimension
 def fft_1d(x):
     x = np.asarray(x, dtype=complex)
     N = x.shape[0]
@@ -86,6 +90,7 @@ def fft_1d(x):
          #   res[n] = even[n % ((N // 2))] + np.exp(-2j * np.pi * n / N) * odd[n % ((N // 2))]
         #return res
 
+# this is the fast fourier transform in 2 dimension
 def fft_2d (img):
     a = np.asarray(img, dtype=complex)
     w, h = a.shape
@@ -97,6 +102,12 @@ def fft_2d (img):
         res[j, :] = fft_1d(res[j, :])
     return res
 
+# this is the helper method for mode 2
+# we investigated three denoising methods
+# 1. remove high frequency
+# 2. width and height have different fraction
+# 3. threshold everything, threshold is 0.9
+# it prints in the command line the number of non-zeros
 def denoise(img, type, precentage, test):
     fft_img = img.copy()
 
@@ -161,29 +172,31 @@ def denoise(img, type, precentage, test):
         plt.imshow(np.abs(denoised), norm=colors.LogNorm())
 
 
-
+# this is the helper method for mode 3
+# it keeps the value for a certain percentage of image file and make others 0
 def compress_f (img, filename, precentage):
     fft_img = img.copy()
     w, h = fft_img.shape
-    #h = int (math.sqrt(1-precentage) * (fft_img.shape[0] / 2))
-    #w = int (math.sqrt(1-precentage) * (fft_img.shape[1] / 2))
-    #fft_img[h:-h, :] = 0 + 0.j
-    #fft_img[:, w:-w] = 0 + 0.j
-    for r in tqdm(range(w)):
-        for c in range(h):
-            if (r + c) > precentage * (w + h):
-                fft_img[r, c] = 0
+    h = int (math.sqrt(1-precentage) * (fft_img.shape[0] / 2))
+    w = int (math.sqrt(1-precentage) * (fft_img.shape[1] / 2))
+    fft_img[h:-h, :] = 0
+    fft_img[:, w:-w] = 0
+    #for r in tqdm(range(w)):
+     #   for c in range(h):
+      #      if (r + c) > precentage * (w + h):
+       #         fft_img[r, c] = 0
 
-    nonzero_pre_compression = np.count_nonzero(img)
-    nonzero_post_compression = np.count_nonzero(fft_img)
-    print("nonzero values: ", np.count_nonzero(fft_img))
-    print("compression ratio: ", 1 - (nonzero_post_compression / nonzero_pre_compression))
+    #nonzero_pre_compression = np.count_nonzero(img)
+    #nonzero_post_compression = np.count_nonzero(fft_img)
+    #print("nonzero values: ", np.count_nonzero(fft_img))
+    print("compressing ", precentage, " percentage of the image")
     #temp_parse = csr_matrix (fft_img)
     #scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
     name = filename+"_"+str(precentage) + ".csv"
     np.savetxt(name, fft_img, delimiter=",")
     return ifft_2d(fft_img).real
 
+# this method is the slow version of fft algorithm
 def sfft (a):
     a = np.asarray(a, dtype=complex)
     N, M = a.shape
@@ -195,6 +208,9 @@ def sfft (a):
                     res[r, c] += a[n, m] * np.exp(-2j * np.pi * ((float(r * n) / N) + (float (c * m) / M)))
     return res
 
+# this method is called when using mode 4
+# we produce plots that summarize the runtime complexity of your algorithms.
+# It prints in the command line the means and variances of the runtime of your algorithms versus the problem size.
 def mode_4():
     print("mode 4 is triggered")
     # print(np.allclose(a, a2))
@@ -225,10 +241,18 @@ def mode_4():
             diffTimeSlow = slow_end-slow_start
             print("Naive time: {}".format(diffTimeSlow))
             fft_list.append(diffTimeSlow)
-        dft_mean.append(statistics.mean(dft_list))
-        dft_std.append(statistics.stdev(dft_list))
-        fft_mean.append(statistics.mean(fft_list))
-        fft_std.append(statistics.stdev(fft_list))
+        meanslow = statistics.mean(dft_list)
+        stdslow = statistics.stdev(dft_list)
+        meanfast = statistics.mean(fft_list)
+        stdfast = statistics.stdev(fft_list)
+        dft_mean.append(meanslow)
+        dft_std.append(stdslow)
+        fft_mean.append(meanfast)
+        fft_std.append(stdfast)
+        print("Slow time mean : {}".format(meanslow))
+        print("Slow time standard deviation : {}".format(stdslow))
+        print("Fast time mean : {}".format(meanfast))
+        print("Fast time standard deviation : {}".format(stdfast))
         x *= 2
 
     plt.figure("Mode_4")
@@ -249,7 +273,9 @@ def mode_4():
     plt.legend()
     plt.show()
 
-
+# after experiment, we found type2 denoise method produces the best result.
+# this method output a one by two subplot.
+# In this subplot we include the original image next to its denoised version.
 def mode_2 (iname, type, precentage):
     img = cv2.imread(iname, cv2.IMREAD_UNCHANGED)
     vertical = img.shape[0]
@@ -264,6 +290,8 @@ def mode_2 (iname, type, precentage):
     #plt.imshow((denoised.real), norm=colors.LogNorm())
     plt.show()
 
+# this method is used for the test mode
+# it produces 3 subplots using different denoise methods
 def mode_2_test (iname, precentage):
     img = cv2.imread(iname, cv2.IMREAD_UNCHANGED)
     vertical = img.shape[0]
@@ -282,6 +310,9 @@ def mode_2_test (iname, precentage):
     #plt.imshow(np.abs(denoised_3), norm=colors.LogNorm())
     plt.show()
 
+# Firstly, we take the FFT of the image to compress it.
+# The compression comes from setting some Fourier coefficients to zero calling compress_f.
+# we experiment on various parameters from compression
 def mode_3 (iname):
     filename = iname.split('.')[0]
     img = cv2.imread(iname, cv2.IMREAD_UNCHANGED)
@@ -318,10 +349,13 @@ def mode_3 (iname):
     plt.show()
 
 
+# this method is used to resize the image
 def changeSize (n):
     p = int(math.log(n, 2))
     return int(pow(2, p+1))
 
+# simply perform the FFT and output a one by two subplot
+# of the original image and next to it its Fourier transform.
 def mode_1 (iname) :
     img = cv2.imread(iname, cv2.IMREAD_GRAYSCALE)
     vertical = img.shape[0]
@@ -336,6 +370,8 @@ def mode_1 (iname) :
     plt.imshow(np.abs(img_FFT), norm=colors.LogNorm())
     plt.show()
 
+# this produces the two subplots
+# of the Fourier transform we implemented and next to it the built in fft2 function in numpy.
 def mode_1_test (iname):
     img = cv2.imread(iname, cv2.IMREAD_GRAYSCALE)
     vertical = img.shape[0]
@@ -353,12 +389,18 @@ def mode_1_test (iname):
 
 def parseArgs():
     parser = argparse.ArgumentParser()
+    helper = {
+        1: "[1] (Default) for fast mode where ther image is converted into its FFT form and displayed",
+        2: "[2] for denoising where the image is denoised by applying an FFT, truncating high frequencies and then displyed",
+        3: "[3] for compressing and saving the image",
+        4: "[4] for plotting the runtime graphs for the report"
+    }
     parser.add_argument('-m', action='store', dest='mode',
-                        help='Mode of operation 1. fast, 2-> denoise, 3-> compress&save 4-> plot', type=int, default=1)
+                        help=''.join(helper.values()), type=int, default=1)
     parser.add_argument('-i', action='store', dest='image',
-                        help='image path to work on', type=str, default='moonlanding.png')
+                        help='image to process', type=str, default='moonlanding.png')
     parser.add_argument('-t', action='store', dest='test',
-                        help='use to test the program', type=int, default=0)
+                        help='this mode is used to test the program', type=int, default=0)
     return parser.parse_args()
 
 if __name__ == '__main__':
