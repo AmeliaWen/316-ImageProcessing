@@ -39,11 +39,13 @@ def ifft_1d(a):
 def ifft(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
-
+    # check size validation
     if N % 2 != 0:
         raise AssertionError("size of a must be a power of 2")
+    # run base case
     elif N <= 16:
         return ifft_1d(a)
+    # recursive call
     else:
         even = ifft(a[::2])
         odd = ifft(a[1::2])
@@ -186,10 +188,10 @@ def compress_f (img, filename, precentage):
       #      if (r + c) > precentage * (w + h):
        #         fft_img[r, c] = 0
 
-    #nonzero_pre_compression = np.count_nonzero(img)
-    #nonzero_post_compression = np.count_nonzero(fft_img)
-    #print("nonzero values: ", np.count_nonzero(fft_img))
+    nonzero_pre_compression = np.count_nonzero(img)
+    nonzero_post_compression = np.count_nonzero(fft_img)
     print("compressing ", precentage, " percentage of the image")
+    print("nonzero values: ", np.count_nonzero(fft_img))
     #temp_parse = csr_matrix (fft_img)
     #scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
     name = filename+"_"+str(precentage) + ".csv"
