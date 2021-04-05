@@ -32,4 +32,3 @@ test (optional) : the extra test mode added to test FFT algorithm and compare di
 NOTE: if -t 1 / -t 2 is presented in command line, the program runs the test mode regardless the other parameters
 Otherwise, it works as the assignment description 
 
-the report link is https://docs.google.com/document/d/1EucHd23aavWrvRxm-l0FIYssupT3rBSTTRU6CJ6A7DA/edit
