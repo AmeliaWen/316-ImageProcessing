@@ -1,13 +1,9 @@
-import sys
 import cv2
 import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-from scipy.sparse import csr_matrix
-import scipy.sparse
 import time
-import statistics
 import argparse
 from tqdm import tqdm
 
@@ -16,12 +12,9 @@ def sfft_1d(a):
     a = np.asarray(a, dtype=complex)
     N = a.shape[0]
     res = np.zeros(N, dtype=complex)
-    #V = np.array([[np.exp(-2j * np.pi * v * y / N) for v in range(N)] for y in range(N)])
-    #return a.dot(V)
     for k in range(N):
         for n in range(N):
             res[k] += a[n] * np.exp(-2j * np.pi * k * n / N)
-    #return a.dot(res)
     return res
 
 # this is the inverse fast fourier transform in 1 dimension (base case)
@@ -49,18 +42,9 @@ def ifft(a):
     else:
         even = ifft(a[::2])
         odd = ifft(a[1::2])
-        #res = np.zeros(N, dtype=complex)
-        #res = np.exp(-2j * np.pi * np.arange(N) / N)
-        #return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
-
-        #half_size = N // 2
-        #for n in range(N):
-        #    res[n] = half_size * even[n % half_size] + np.exp(2j * np.pi * n / N) * half_size * odd[n % half_size]
-        #res[n] /= N
         res = np.exp(2j * np.pi * np.arange(N) / N).astype(np.complex64)
         return np.concatenate((even + res[:N // 2] * odd,
                                even + res[N // 2:] * odd), axis=0)
-        #return res
 
 # this is the inverse fast fourier transform in 2 dimension
 def ifft_2d(a):
@@ -84,20 +68,14 @@ def fft_1d(x):
     else:
         even = fft_1d(x[::2])
         odd = fft_1d(x[1::2])
-        #res = np.zeros(N, dtype=complex)
         res = np.exp(-2j * np.pi * np.arange(N) / N)
         return np.concatenate([even + res[:int(N / 2)] * odd, even + res[int(N / 2):] * odd])
-
-        #for n in range (N):
-         #   res[n] = even[n % ((N // 2))] + np.exp(-2j * np.pi * n / N) * odd[n % ((N // 2))]
-        #return res
 
 # this is the fast fourier transform in 2 dimension
 def fft_2d (img):
     a = np.asarray(img, dtype=complex)
     w, h = a.shape
     res = np.empty_like(img, dtype=complex)
-    #res = np.zeros((w, h), dtype=complex)
     for i in range(h):
         res[:, i] = fft_1d(a[:,i])
     for j in range(w):
@@ -112,10 +90,7 @@ def fft_2d (img):
 # it prints in the command line the number of non-zeros
 def denoise(img, type, precentage, test):
     fft_img = img.copy()
-
     h, w = fft_img.shape
-
-
     if type == 1:
         print("remove high frequency")
         for r in tqdm(range(h)):
@@ -127,7 +102,6 @@ def denoise(img, type, precentage, test):
         non_zero_count = np.count_nonzero(fft_img)
         print("amount of non-zeros: ", non_zero_count)
         print("fraction of non-zero coefficient: ", non_zero_count / fft_img.size)
-
         denoised = ifft_2d(fft_img)
         #not in test mode
         if test == 0:
@@ -183,17 +157,8 @@ def compress_f (img, filename, precentage):
     w = int (math.sqrt(1-precentage) * (fft_img.shape[1] / 2))
     fft_img[h:-h, :] = 0
     fft_img[:, w:-w] = 0
-    #for r in tqdm(range(w)):
-     #   for c in range(h):
-      #      if (r + c) > precentage * (w + h):
-       #         fft_img[r, c] = 0
-
-    nonzero_pre_compression = np.count_nonzero(img)
-    nonzero_post_compression = np.count_nonzero(fft_img)
     print("compressing ", precentage, " percentage of the image")
     print("nonzero values: ", np.count_nonzero(fft_img))
-    #temp_parse = csr_matrix (fft_img)
-    #scipy.sparse.save_npz(filename+'_'+str(precentage) + ".npz", temp_parse)
     name = filename+"_"+str(precentage) + ".csv"
     np.savetxt(name, fft_img, delimiter=",")
     return ifft_2d(fft_img).real
@@ -215,25 +180,23 @@ def sfft (a):
 # It prints in the command line the means and variances of the runtime of your algorithms versus the problem size.
 def mode_4():
     print("mode 4 is triggered")
-    # print(np.allclose(a, a2))
-    # print(str(endTime-startTime) + " " + str(endTime2-startTime2))
-    size = [32, 64, 128, 256, 512]
-
+    size = [32, 64, 128]
+    slow_time = list()
+    fast_time = list()
     dft_mean = list()
     dft_std = list()
     fft_mean = list()
     fft_std = list()
 
     x = 32
-    for j in range(5):
+    for j in range(3):
         dft_list = list()
         fft_list = list()
         for i in range(10):
-            y = np.random.rand(x, x)
+            y = np.random.rand(x, x).astype(np.float32)
             startTime = time.time()
             fft_2d(y)
             endTime = time.time()
-            # print(np.allclose(my, np.fft.fft2(y)))
             diffTime = endTime - startTime
             print("Fast time: {}".format(diffTime))
             dft_list.append(diffTime)
@@ -241,38 +204,27 @@ def mode_4():
             sfft(y)
             slow_end = time.time()
             diffTimeSlow = slow_end-slow_start
-            print("Naive time: {}".format(diffTimeSlow))
+            print("Slow time: {}".format(diffTimeSlow))
             fft_list.append(diffTimeSlow)
-        meanslow = statistics.mean(dft_list)
-        stdslow = statistics.stdev(dft_list)
-        meanfast = statistics.mean(fft_list)
-        stdfast = statistics.stdev(fft_list)
-        dft_mean.append(meanslow)
-        dft_std.append(stdslow)
-        fft_mean.append(meanfast)
-        fft_std.append(stdfast)
-        print("Slow time mean : {}".format(meanslow))
-        print("Slow time standard deviation : {}".format(stdslow))
-        print("Fast time mean : {}".format(meanfast))
-        print("Fast time standard deviation : {}".format(stdfast))
+        slow_time.append(fft_list)
+        fast_time.append(dft_list)
         x *= 2
-
+    slow_time = np.array(slow_time)
+    fast_time = np.array(fast_time)
+    slow_mean = slow_time.mean(axis=1)
+    slow_std = slow_time.std(axis=1) * 2
+    fast_mean = fast_time.mean(axis=1)
+    fast_std = fast_time.std(axis=1) * 2
     plt.figure("Mode_4")
-    plt.subplot(121)
-    plt.plot(size, dft_mean, label="DFT")
-    plt.plot(size, fft_mean, label="FFT")
-    plt.xlabel('Size')
-    plt.ylabel('Runtime Mean')
-    plt.title('Mean')
-    plt.legend()
-
-    plt.subplot(122)
-    plt.plot(size, dft_std, label="DFT")
-    plt.plot(size, fft_std, label="FFT")
-    plt.xlabel('Size')
-    plt.ylabel('Runtime Std. Dev.')
-    plt.title('Standard Deviation')
-    plt.legend()
+    power = np.arange(5, 8)
+    plt.subplot(133)
+    plt.errorbar(power, slow_mean, yerr=slow_std, label="slow")
+    plt.errorbar(power, fast_mean, yerr=fast_std, label="fast")
+    plt.xlabel("size of test data (power of 2)")
+    plt.ylabel("runtime (second)")
+    plt.xticks(power)
+    plt.title("Runtime for slow FT against fast FT")
+    plt.legend(loc='best')
     plt.show()
 
 # after experiment, we found type2 denoise method produces the best result.
@@ -288,8 +240,6 @@ def mode_2 (iname, type, precentage):
     plt.subplot(121)
     plt.imshow(img)
     denoise(img_FFT, type, precentage, 0)
-    #plt.subplot(122)
-    #plt.imshow((denoised.real), norm=colors.LogNorm())
     plt.show()
 
 # this method is used for the test mode
@@ -304,12 +254,6 @@ def mode_2_test (iname, precentage):
     denoise(img_FFT, 1, precentage, 1)
     denoise(img_FFT, 2, precentage, 2)
     denoise(img_FFT, 3, precentage, 3)
-    #plt.subplot(131)
-    #plt.imshow(np.abs(denoised_1), norm=colors.LogNorm())
-    #plt.subplot(132)
-    #plt.imshow(np.abs(denoised_2), norm=colors.LogNorm())
-    #plt.subplot(133)
-    #plt.imshow(np.abs(denoised_3), norm=colors.LogNorm())
     plt.show()
 
 # Firstly, we take the FFT of the image to compress it.
